@@ -1,0 +1,1270 @@
+Full HTML/JS/CSS renderer for the MHD schema
+
+Below is a complete, self‑contained interface very close to what you already had—just extended to the full MHD/thermo/electrodynamic spherical schema.
+
+---
+
+1. index.html
+
+`html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MHD Thermo-Electrodynamic Sphere Library</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>MHD Thermo‑Electrodynamic Spherical Fluid Library</h1>
+  </header>
+
+  <main>
+    <section id="pattern-list-section">
+      <h2>Patterns</h2>
+      <div id="pattern-list"></div>
+    </section>
+
+    <section id="pattern-detail-section">
+      <h2>Pattern overview</h2>
+      <div id="pattern-overview"></div>
+      <h3>Geometry</h3>
+      <div id="geometry-detail"></div>
+      <h3>Particles</h3>
+      <div id="particles-detail"></div>
+      <h3>Dynamo</h3>
+      <div id="dynamo-detail"></div>
+      <h3>Thermodynamics</h3>
+      <div id="thermo-detail"></div>
+      <h3>Electrodynamics</h3>
+      <div id="electro-detail"></div>
+    </section>
+
+    <section id="field-detail-section">
+      <h2>Fields and harmonic modes</h2>
+      <div id="field-tabs"></div>
+      <div id="field-modes"></div>
+    </section>
+  </main>
+
+  <footer>
+    <small>MHD Spherical Fluid Library &mdash; JSON‑backed viewer</small>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
+`
+
+---
+
+2. styles.css
+
+`css
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #050816;
+  color: #f9fafb;
+}
+
+header, footer {
+  background: #0b1020;
+  padding: 1rem 1.5rem;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+footer {
+  font-size: 0.8rem;
+  text-align: center;
+  color: #9ca3af;
+}
+
+main {
+  display: grid;
+  grid-template-columns: 0.9fr 1.4fr 1.4fr;
+  gap: 1rem;
+  padding: 1rem 1.5rem 2rem;
+}
+
+section {
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 0.75rem 1rem 1rem;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.15);
+}
+
+section h2 {
+  margin-top: 0;
+  font-size: 1.05rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+  padding-bottom: 0.4rem;
+}
+
+section h3 {
+  margin: 0.8rem 0 0.3rem;
+  font-size: 0.95rem;
+  color: #a5b4fc;
+}
+
+pattern-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pattern-item {
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  background: #020617;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.pattern-item:hover {
+  background: #020617;
+  border-color: rgba(148, 163, 184, 0.6);
+}
+
+.pattern-item.active {
+  border-color: #38bdf8;
+  background: #020617;
+}
+
+.pattern-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.pattern-meta {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.detail-block {
+  margin-bottom: 0.6rem;
+}
+
+.detail-label {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #a5b4fc;
+  margin-bottom: 0.15rem;
+}
+
+.detail-text {
+  font-size: 0.85rem;
+}
+
+.code-block {
+  background: #020617;
+  border-radius: 6px;
+  padding: 0.45rem 0.6rem;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.78rem;
+  overflow-x: auto;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.inline-pill {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.6);
+  font-size: 0.7rem;
+  margin-right: 0.25rem;
+}
+
+field-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.field-tab {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: #020617;
+  color: #e5e7eb;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.field-tab:hover {
+  background: #020617;
+  border-color: #38bdf8;
+}
+
+.field-tab.active {
+  background: #38bdf8;
+  color: #020617;
+  border-color: #38bdf8;
+}
+
+.mode-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.mode-item {
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  background: #020617;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.mode-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  margin-bottom: 0.25rem;
+}
+
+.mode-label {
+  font-weight: 600;
+}
+
+.mode-tag {
+  font-size: 0.7rem;
+  color: #9ca3af;
+}
+
+.mode-body {
+  font-size: 0.78rem;
+}
+
+.mode-body strong {
+  font-weight: 600;
+}
+
+.small-muted {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+`
+
+---
+
+3. app.js
+
+`js
+// ---------- Domain classes for MHD schema ----------
+
+class ScalarHarmonic {
+  constructor(raw) {
+    this.modes = raw?.modes || [];
+  }
+
+  summary() {
+    return ${this.modes.length} scalar modes;
+  }
+}
+
+class FieldHarmonic {
+  constructor(raw) {
+    this.modes = raw?.modes || [];
+  }
+
+  summary() {
+    return ${this.modes.length} vector modes;
+  }
+}
+
+class MHDPattern {
+  constructor(raw) {
+    this.raw = raw;
+    this.id = raw.id;
+    this.name = raw.name;
+    this.description = raw.description;
+
+    this.geometry = raw.geometry || {};
+    this.fields = {
+      electricField: new FieldHarmonic(raw.fields?.electricField || {}),
+      magneticField: new FieldHarmonic(raw.fields?.magneticField || {}),
+      velocityField: new FieldHarmonic(raw.fields?.velocityField || {}),
+      pressure: new ScalarHarmonic(raw.fields?.pressure || {}),
+      temperature: new ScalarHarmonic(raw.fields?.temperature || {}),
+      density: new ScalarHarmonic(raw.fields?.density || {})
+    };
+
+    this.particles = raw.particles || {};
+    this.dynamo = raw.dynamo || {};
+    this.thermodynamics = raw.thermodynamics || {};
+    this.electrodynamics = {
+      chargeDistribution: new ScalarHarmonic(raw.electrodynamics?.chargeDistribution || {}),
+      currentDensity: new FieldHarmonic(raw.electrodynamics?.currentDensity || {}),
+      radiationModel: raw.electrodynamics?.radiationModel || ""
+    };
+
+    this.metadata = raw.metadata || {};
+  }
+}
+
+// ---------- State ----------
+
+const state = {
+  patterns: [],
+  selectedPattern: null,
+  selectedFieldKey: "magneticField"
+};
+
+// ---------- DOM helpers ----------
+
+function $(sel) {
+  return document.querySelector(sel);
+}
+
+function createEl(tag, className, text) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+// ---------- Rendering: pattern list ----------
+
+function renderPatternList() {
+  const container = $("#pattern-list");
+  container.innerHTML = "";
+
+  if (!state.patterns.length) {
+    container.textContent = "No patterns loaded.";
+    return;
+  }
+
+  state.patterns.forEach(p => {
+    const item = createEl("div", "pattern-item");
+    item.dataset.id = p.id;
+
+    if (state.selectedPattern && state.selectedPattern.id === p.id) {
+      item.classList.add("active");
+    }
+
+    const nameEl = createEl("div", "pattern-name", p.name);
+    const metaEl = createEl(
+      "div",
+      "pattern-meta",
+      radius=${p.geometry.radius ?? "?"}, lMax=${p.geometry.harmonicBasis?.lMax ?? "?"}
+    );
+
+    item.appendChild(nameEl);
+    item.appendChild(metaEl);
+
+    item.addEventListener("click", () => {
+      state.selectedPattern = p;
+      renderPatternList();
+      renderPatternOverview();
+      renderGeometry();
+      renderParticles();
+      renderDynamo();
+      renderThermo();
+      renderElectro();
+      renderFieldTabs();
+      renderFieldModes();
+    });
+
+    container.appendChild(item);
+  });
+}
+
+// ---------- Rendering: overview & blocks ----------
+
+function renderPatternOverview() {
+  const container = $("#pattern-overview");
+  container.innerHTML = "";
+
+  if (!state.selectedPattern) {
+    container.innerHTML = "<p class='small-muted'>Select a pattern to view details.</p>";
+    return;
+  }
+
+  const p = state.selectedPattern;
+
+  const descBlock = createEl("div", "detail-block");
+  const label = createEl("div", "detail-label", "Description");
+  const text = createEl("div", "detail-text", p.description || "No description.");
+  descBlock.appendChild(label);
+  descBlock.appendChild(text);
+
+  const metaBlock = createEl("div", "detail-block");
+  const metaLabel = createEl("div", "detail-label", "Metadata");
+  const metaCode = createEl("pre", "code-block");
+  metaCode.textContent = JSON.stringify(p.metadata, null, 2);
+  metaBlock.appendChild(metaLabel);
+  metaBlock.appendChild(metaCode);
+
+  container.appendChild(descBlock);
+  container.appendChild(metaBlock);
+}
+
+function renderGeometry() {
+  const container = $("#geometry-detail");
+  container.innerHTML = "";
+
+  if (!state.selectedPattern) {
+    container.innerHTML = "<p class='small-muted'>No pattern selected.</p>";
+    return;
+  }
+
+  const g = state.selectedPattern.geometry;
+
+  const block = createEl("div", "detail-block");
+  const label = createEl("div", "detail-label", "Spherical geometry");
+  const code = createEl("pre", "code-block");
+  code.textContent = JSON.stringify(g, null, 2);
+
+  block.appendChild(label);
+  block.appendChild(code);
+  container.appendChild(block);
+}
+
+function renderParticles() {
+  const container = $("#particles-detail");
+  container.innerHTML = "";
+
+  if (!state.selectedPattern) {
+    container.innerHTML = "<p class='small-muted'>No pattern selected.</p>";
+    return;
+  }
+
+  const p = state.selectedPattern.particles;
+
+  const block = createEl("div", "detail-block");
+  const label = createEl("div", "detail-label", "Particles & rules");
+  const text = createEl(
+    "div",
+    "detail-text",
+    Count: ${p.count ?? "?"}
+  );
+  const code = createEl("pre", "code-block");
+  code.textContent = JSON.stringify(p.rules || {}, null, 2);
+
+  block.appendChild(label);
+  block.appendChild(text);
+  block.appendChild(code);
+  container.appendChild(block);
+}
+
+function renderDynamo() {
+  const container = $("#dynamo-detail");
+  container.innerHTML = "";
+
+  if (!state.selectedPattern) {
+    container.innerHTML = "<p class='small-muted'>No pattern selected.</p>";
+    return;
+  }
+
+  const d = state.selectedPattern.dynamo;
+
+  const block = createEl("div", "detail-block");
+  const label = createEl("div", "detail-label", "Dynamo model");
+  const text = createEl(
+    "div",
+    "detail-text",
+    Enabled: ${d.enabled ? "yes" : "no"}
+  );
+  const code = createEl("pre", "code-block");
+  code.textContent = JSON.stringify(d, null, 2);
+
+  block.appendChild(label);
+  block.appendChild(text);
+  block.appendChild(code);
+  container.appendChild(block);
+}
+
+function renderThermo() {
+  const container = $("#thermo-detail");
+  container.innerHTML = "";
+
+  if (!state.selectedPattern) {
+    container.innerHTML = "<p class='small-muted'>No pattern selected.</p>";
+    return;
+  }
+
+  const t = state.selectedPattern.thermodynamics;
+
+  const block = createEl("div", "detail-block");
+  const label = createEl("div", "detail-label", "Thermodynamics");
+  const code = createEl("pre", "code-block");
+  code.textContent = JSON.stringify(t, null, 2);
+
+  block.appendChild(label);
+  block.appendChild(code);
+  container.appendChild(block);
+}
+
+function renderElectro() {
+  const container = $("#electro-detail");
+  container.innerHTML = "";
+
+  if (!state.selectedPattern) {
+    container.innerHTML = "<p class='small-muted'>No pattern selected.</p>";
+    return;
+  }
+
+  const e = state.selectedPattern.electrodynamics;
+
+  const block = createEl("div", "detail-block");
+  const label = createEl("div", "detail-label", "Electrodynamics");
+  const code = createEl("pre", "code-block");
+  code.textContent = JSON.stringify(
+    {
+      chargeDistribution: e.chargeDistribution,
+      currentDensity: e.currentDensity,
+      radiationModel: e.radiationModel
+    },
+    null,
+    2
+  );
+
+  block.appendChild(label);
+  block.appendChild(code);
+  container.appendChild(block);
+}
+
+// ---------- Rendering: fields & modes ----------
+
+const FIELD_KEYS = [
+  { key: "magneticField", label: "Magnetic field B" },
+  { key: "electricField", label: "Electric field E" },
+  { key: "velocityField", label: "Velocity field v" },
+  { key: "pressure", label: "Pressure p" },
+  { key: "temperature", label: "Temperature T" },
+  { key: "density", label: "Density ρ" },
+  { key: "chargeDistribution", label: "Charge distribution ρ_q" },
+  { key: "currentDensity", label: "Current density J" }
+];
+
+function getFieldObject(pattern, key) {
+  if (key === "chargeDistribution") return pattern.electrodynamics.chargeDistribution;
+  if (key === "currentDensity") return pattern.electrodynamics.currentDensity;
+  return pattern.fields[key];
+}
+
+function renderFieldTabs() {
+  const container = $("#field-tabs");
+  container.innerHTML = "";
+
+  if (!state.selectedPattern) {
+    container.innerHTML = "<p class='small-muted'>No pattern selected.</p>";
+    return;
+  }
+
+  FIELD_KEYS.forEach(f => {
+    const tab = createEl("button", "field-tab", f.label);
+    if (state.selectedFieldKey === f.key) {
+      tab.classList.add("active");
+    }
+    tab.addEventListener("click", () => {
+      state.selectedFieldKey = f.key;
+      renderFieldTabs();
+      renderFieldModes();
+    });
+    container.appendChild(tab);
+  });
+}
+
+function renderFieldModes() {
+  const container = $("#field-modes");
+  container.innerHTML = "";
+
+  if (!state.selectedPattern) {
+    container.innerHTML = "<p class='small-muted'>No pattern selected.</p>";
+    return;
+  }
+
+  const fieldObj = getFieldObject(state.selectedPattern, state.selectedFieldKey);
+  if (!fieldObj || !fieldObj.modes || !fieldObj.modes.length) {
+    container.innerHTML = "<p class='small-muted'>No modes defined for this field.</p>";
+    return;
+  }
+
+  const list = createEl("div", "mode-list");
+
+  fieldObj.modes.forEach((mode, idx) => {
+    const item = createEl("div", "mode-item");
+
+    const header = createEl("div", "mode-header");
+    const label = createEl(
+      "div",
+      "mode-label",
+      Mode ${idx + 1}: l=${mode.l}, m=${mode.m}
+    );
+    const tag = createEl(
+      "div",
+      "mode-tag",
+      mode.vectorComponents ? "vector harmonic" : "scalar harmonic"
+    );
+    header.appendChild(label);
+    header.appendChild(tag);
+
+    const body = createEl("div", "mode-body");
+
+    const rp = createEl("div", null);
+    rp.innerHTML = <strong>Radial profile:</strong> ${mode.radialProfile || "—"};
+    body.appendChild(rp);
+
+    if (mode.vectorComponents) {
+      const vc = mode.vectorComponents;
+      const vcDiv = createEl("div", null);
+      vcDiv.innerHTML =
+        <strong>Components:</strong>  +
+        <span class="inline-pill">E<sub>r</sub> / B<sub>r</sub> / v<sub>r</sub></span> ${vc.r || "0"},  +
+        <span class="inline-pill">θ</span> ${vc.theta || "0"},  +
+        <span class="inline-pill">φ</span> ${vc.phi || "0"};
+      body.appendChild(vcDiv);
+    } else if (typeof mode.coefficient !== "undefined") {
+      const coeffDiv = createEl("div", null);
+      coeffDiv.innerHTML = <strong>Coefficient:</strong> ${mode.coefficient};
+      body.appendChild(coeffDiv);
+    }
+
+    item.appendChild(header);
+    item.appendChild(body);
+    list.appendChild(item);
+  });
+
+  container.appendChild(list);
+}
+
+// ---------- Initialization ----------
+
+// Example pattern (you can replace this with fetch from patterns_mhd.json)
+const EXAMPLE_PATTERN = {
+  "id": "mhdsphere001",
+  "name": "Baseline MHD Thermo-Electrodynamic Sphere",
+  "description": "A coherent plasma sphere with E/B/v fields represented in spherical harmonics.",
+  "geometry": {
+    "radius": 1.0,
+    "coordinateSystem": "spherical",
+    "harmonicBasis": {
+      "lMax": 6,
+      "mMax": 6,
+      "normalization": "orthonormal"
+    }
+  },
+  "fields": {
+    "electricField": {
+      "modes": [
+        {
+          "l": 1,
+          "m": 0,
+          "radialProfile": "A * r",
+          "vectorComponents": {
+            "r": "A * r",
+            "theta": "0",
+            "phi": "0"
+          }
+        }
+      ]
+    },
+    "magneticField": {
+      "modes": [
+        {
+          "l": 1,
+          "m": 1,
+          "radialProfile": "B0 * r^2",
+          "vectorComponents": {
+            "r": "0",
+            "theta": "B0  r^2  sin(theta)",
+            "phi": "B0  r^2  cos(theta)"
+          }
+        }
+      ]
+    },
+    "velocityField": {
+      "modes": [
+        {
+          "l": 2,
+          "m": 1,
+          "radialProfile": "v0  r  (1 - r)",
+          "vectorComponents": {
+            "r": "v0  r  (1 - r)",
+            "theta": "0",
+            "phi": "0"
+          }
+        }
+      ]
+    },
+    "pressure": {
+      "modes": [
+        { "l": 0, "m": 0, "radialProfile": "p0", "coefficient": 1.0 }
+      ]
+    },
+    "temperature": {
+      "modes": [
+        { "l": 1, "m": 0, "radialProfile": "T0 + T1*r", "coefficient": 1.0 }
+      ]
+    },
+    "density": {
+      "modes": [
+        { "l": 0, "m": 0, "radialProfile": "rho0", "coefficient": 1.0 }
+      ]
+    }
+  },
+  "particles": {
+    "count": 5000,
+    "rules": {
+      "coherenceInheritance": "particles inherit phase alignment from center emission",
+      "chargeMotionLaw": "Lorentz force: q(E + v × B)",
+      "magnetizationResponse": "dipole alignment with local B",
+      "thermalExchangeLaw": "dT/dt = k*(Tfield - Tparticle)"
+    }
+  },
+  "dynamo": {
+    "enabled": true,
+    "alphaEffect": "alpha0 * (B ⋅ ∇ × v)",
+    "betaEffect": "beta0 * ∇² B",
+    "closure": "mean-field MHD",
+    "feedbackChannels": [
+      {
+        "id": "fb1",
+        "source": "velocityField",
+        "target": "magneticField",
+        "mathForm": {
+          "variables": ["r", "theta", "phi"],
+          "expression": "alpha0 * (∇ × v)",
+          "parameters": { "alpha0": 0.1 }
+        }
+      }
+    ]
+  },
+  "thermodynamics": {
+    "equationOfState": "p = rho  k  T",
+    "heatTransportLaw": "Fourier conduction",
+    "entropyProduction": "sigma = J ⋅ E / T"
+  },
+  "electrodynamics": {
+    "chargeDistribution": {
+      "modes": [
+        { "l": 0, "m": 0, "radialProfile": "rho_q0", "coefficient": 1.0 }
+      ]
+    },
+    "currentDensity": {
+      "modes": [
+        {
+          "l": 1,
+          "m": 1,
+          "radialProfile": "J0 * r",
+          "vectorComponents": {
+            "r": "0",
+            "theta": "J0  r  sin(theta)",
+            "phi": "J0  r  cos(theta)"
+          }
+        }
+      ]
+    },
+    "radiationModel": "dipole emission"
+  },
+  "metadata": {
+    "version": "1.0",
+    "tags": ["MHD", "spherical", "plasma", "harmonics"]
+  }
+};
+
+function init() {
+  // If you want external JSON, replace this with fetch and map to MHDPattern.
+  state.patterns = [new MHDPattern(EXAMPLE_PATTERN)];
+  state.selectedPattern = state.patterns[0];
+
+  renderPatternList();
+  renderPatternOverview();
+  renderGeometry();
+  renderParticles();
+  renderDynamo();
+  renderThermo();
+  renderElectro();
+  renderFieldTabs();
+  renderFieldModes();
+}
+
+document.addEventListener("DOMContentLoaded", init);
+`
+
+---
+
+If you want, next step we can add a second pattern and a patterns_mhd.json loader so this becomes a true library browser.
+
+Below is the continuation you asked for — the renderer is already complete and functional, so now I’m extending it exactly where the architecture naturally goes next, without repeating anything you already have.
+
+This continuation adds:
+
+- Multi‑pattern library loading  
+- External JSON loading (patterns_mhd.json)  
+- Pattern switching, caching, and hot‑reload  
+- Schema‑aware validation  
+- Optional inline visualization hooks (no rendering yet — just the structural slots)
+
+All of this integrates seamlessly with the renderer you already have.
+
+---
+
+🔧 1. Add multi‑pattern loading (patterns_mhd.json)
+
+Create a file named:
+
+`
+patterns_mhd.json
+`
+
+Put an array of MHD patterns inside:
+
+`json
+[
+  {
+    "id": "mhdsphere001",
+    "name": "Baseline MHD Sphere",
+    "description": "Reference coherent plasma sphere.",
+    "geometry": {
+      "radius": 1.0,
+      "coordinateSystem": "spherical",
+      "harmonicBasis": { "lMax": 6, "mMax": 6, "normalization": "orthonormal" }
+    },
+    "fields": { },
+    "particles": { },
+    "dynamo": { },
+    "thermodynamics": { },
+    "electrodynamics": { },
+    "metadata": { "version": "1.0" }
+  },
+
+  {
+    "id": "mhdsphere002",
+    "name": "High‑Beta Turbulent Sphere",
+    "description": "Strong pressure‑dominated regime with turbulent harmonics.",
+    "geometry": {
+      "radius": 1.0,
+      "coordinateSystem": "spherical",
+      "harmonicBasis": { "lMax": 12, "mMax": 12, "normalization": "orthonormal" }
+    },
+    "fields": { },
+    "particles": { },
+    "dynamo": { },
+    "thermodynamics": { },
+    "electrodynamics": { },
+    "metadata": { "version": "1.0" }
+  }
+]
+`
+
+You can add as many patterns as you want.
+
+---
+
+🔌 2. Update app.js to load external patterns
+
+Add this function near the top:
+
+`js
+async function loadPatternLibrary() {
+  try {
+    const res = await fetch("patterns_mhd.json");
+    const arr = await res.json();
+
+    state.patterns = arr.map(raw => new MHDPattern(raw));
+    state.selectedPattern = state.patterns[0];
+
+    renderPatternList();
+    renderPatternOverview();
+    renderGeometry();
+    renderParticles();
+    renderDynamo();
+    renderThermo();
+    renderElectro();
+    renderFieldTabs();
+    renderFieldModes();
+
+  } catch (err) {
+    console.error("Failed to load patterns_mhd.json", err);
+    $("#pattern-list").textContent = "Error loading pattern library.";
+  }
+}
+`
+
+Then replace your init() with:
+
+`js
+function init() {
+  loadPatternLibrary();
+}
+`
+
+Now the interface loads all patterns from the JSON file.
+
+---
+
+🧪 3. Add schema‑aware validation (optional but recommended)
+
+Insert this helper:
+
+`js
+function validatePattern(raw) {
+  const errors = [];
+
+  if (!raw.id) errors.push("Missing id");
+  if (!raw.name) errors.push("Missing name");
+  if (!raw.geometry) errors.push("Missing geometry");
+  if (!raw.fields) errors.push("Missing fields");
+
+  if (raw.geometry && raw.geometry.harmonicBasis) {
+    const hb = raw.geometry.harmonicBasis;
+    if (hb.lMax < 0) errors.push("lMax must be >= 0");
+    if (hb.mMax < 0) errors.push("mMax must be >= 0");
+  }
+
+  return errors;
+}
+`
+
+Then modify the loader:
+
+`js
+state.patterns = arr.map(raw => {
+  const errs = validatePattern(raw);
+  if (errs.length) {
+    console.warn(Pattern ${raw.id} has validation errors:, errs);
+  }
+  return new MHDPattern(raw);
+});
+`
+
+This gives you schema‑level safety without needing a full JSON Schema validator.
+
+---
+
+🎛 4. Add visualization hooks (no rendering yet)
+
+Inside field-modes rendering, add:
+
+`js
+const vizHook = createEl("div", "viz-hook");
+vizHook.textContent = "Visualization slot (WebGL/SVG) for this mode";
+body.appendChild(vizHook);
+`
+
+Inside geometry-detail, add:
+
+`js
+const geoViz = createEl("div", "viz-hook");
+geoViz.textContent = "Geometry visualization slot";
+container.appendChild(geoViz);
+`
+
+Inside dynamo-detail, add:
+
+`js
+const dynViz = createEl("div", "viz-hook");
+dynViz.textContent = "Dynamo feedback visualization slot";
+container.appendChild(dynViz);
+`
+
+Add CSS:
+
+`css
+.viz-hook {
+  margin-top: 0.4rem;
+  padding: 0.4rem;
+  border-radius: 6px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px dashed rgba(56, 189, 248, 0.4);
+  font-size: 0.75rem;
+  color: #38bdf8;
+}
+`
+
+Now the UI has dedicated visualization placeholders ready for WebGL, SVG, or canvas.
+
+---
+
+📦 5. Add pattern switching hot‑reload
+
+Add this:
+
+`js
+async function reloadPatterns() {
+  await loadPatternLibrary();
+}
+`
+
+Add a button in index.html:
+
+`html
+<button id="reload-btn" class="reload-button">Reload Library</button>
+`
+
+Add CSS:
+
+`css
+.reload-button {
+  margin-top: 0.5rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  background: #38bdf8;
+  border: none;
+  color: #020617;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+`
+
+Add JS:
+
+`js
+document.addEventListener("DOMContentLoaded", () => {
+  $("#reload-btn").addEventListener("click", reloadPatterns);
+});
+`
+
+Now you can edit patterns_mhd.json and reload instantly.
+
+---
+
+🌐 6. Add pattern metadata badges
+
+Inside pattern list rendering:
+
+`js
+const tags = p.metadata.tags || [];
+const tagRow = createEl("div", "tag-row");
+tags.forEach(t => {
+  const pill = createEl("span", "inline-pill", t);
+  tagRow.appendChild(pill);
+});
+item.appendChild(tagRow);
+`
+
+Add CSS:
+
+`css
+.tag-row {
+  margin-top: 0.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+`
+
+Now each pattern shows its tags as badges.
+
+---
+
+🎯 Your renderer is now a complete MHD pattern browser
+
+It now supports:
+
+- Multi‑pattern libraries  
+- External JSON loading  
+- Schema validation  
+- Visualization hooks  
+- Hot reload  
+- Metadata badges  
+- Full spherical MHD/thermo/electrodynamic schema  
+
+This is now a proper scientific pattern library viewer.
+
+---
+
+➡️ Next step
+Would you like me to add:
+
+- WebGL vector‑field visualization  
+- Spherical harmonic surface rendering  
+- Particle‑level simulation hooks  
+
+Each one plugs directly into the visualization slots you now have.
+
+Absolutely, Brad — and this is a smart structural improvement.  
+Right now, your MHD library loads a single JSON file containing an array of patterns.  
+You want to evolve this into a true library system where:
+
+- Each energy signature (each MHD pattern) lives in its own file  
+- The system discovers, loads, and indexes them automatically  
+- The UI treats them exactly the same as before  
+- The architecture remains schema‑driven, modular, and clean  
+
+This is exactly the direction a real scientific pattern library should go.
+
+Below is the improved architecture, the loader, and the UI integration — all fully aligned with your schema‑driven design preferences.
+
+---
+
+🔥 New Architecture: One Pattern Per File
+
+Each pattern becomes:
+
+`
+/patterns/
+    mhdsphere001.json
+    mhdsphere002.json
+    mhdsphere003.json
+    ...
+`
+
+And a manifest file lists them:
+
+`
+patterns_manifest.json
+`
+
+This keeps the system:
+
+- Modular  
+- Extensible  
+- Versionable  
+- Easy to update  
+- Easy to sync with Git or DAMMS-style manifests  
+
+---
+
+📁 1. Directory Structure
+
+`
+/patterns/
+    mhdsphere001.json
+    mhdsphere002.json
+    mhdsphere003.json
+
+patterns_manifest.json
+index.html
+app.js
+styles.css
+`
+
+---
+
+📜 2. Manifest File (patterns_manifest.json)
+
+This file lists the filenames only:
+
+`json
+{
+  "patterns": [
+    "mhdsphere001.json",
+    "mhdsphere002.json",
+    "mhdsphere003.json"
+  ]
+}
+`
+
+You can add/remove patterns by editing this list — no code changes required.
+
+---
+
+⚙️ 3. Updated Loader in app.js
+
+Replace your loader with this multi‑file loader:
+
+`js
+async function loadPatternLibrary() {
+  try {
+    // Load manifest
+    const manifestRes = await fetch("patterns_manifest.json");
+    const manifest = await manifestRes.json();
+
+    const patternFiles = manifest.patterns || [];
+    const loaded = [];
+
+    // Load each pattern file individually
+    for (const file of patternFiles) {
+      try {
+        const res = await fetch(patterns/${file});
+        const raw = await res.json();
+        loaded.push(new MHDPattern(raw));
+      } catch (err) {
+        console.warn(Failed to load pattern file: ${file}, err);
+      }
+    }
+
+    state.patterns = loaded;
+    state.selectedPattern = loaded[0] || null;
+
+    renderPatternList();
+    renderPatternOverview();
+    renderGeometry();
+    renderParticles();
+    renderDynamo();
+    renderThermo();
+    renderElectro();
+    renderFieldTabs();
+    renderFieldModes();
+
+  } catch (err) {
+    console.error("Failed to load manifest", err);
+    $("#pattern-list").textContent = "Error loading pattern manifest.";
+  }
+}
+`
+
+This loader:
+
+- Reads the manifest  
+- Loads each pattern file individually  
+- Wraps each in your MHDPattern class  
+- Populates the UI  
+
+---
+
+🧠 4. Why This Is Better
+
+Modularity
+Each energy signature is now a first‑class artifact.
+
+Versioning
+You can version patterns independently.
+
+Schema Evolution
+You can migrate patterns one at a time.
+
+Scalability
+You can have hundreds of patterns without a giant JSON blob.
+
+DAMMS Alignment
+This mirrors your DAMMS-style manifest + atomic file structure.
+
+---
+
+🖥️ 5. UI Behavior (unchanged)
+
+Your UI already supports:
+
+- Pattern list  
+- Pattern detail  
+- Field tabs  
+- Harmonic mode rendering  
+- Dynamo/thermo/electro blocks  
+
+The only change is where the data comes from.
+
+---
+
+📦 6. Optional: Auto‑Discovery (no manifest needed)
+
+If you want the system to automatically load all JSON files in /patterns/ without a manifest, I can generate a small indexer script that runs locally or server‑side.
+
+If you want that, choose:
+
+- Auto‑discover pattern files
+
+---
+
+➡️ Next Step
+
+Do you want:
+
+- Pattern editing UI  
+- Pattern creation wizard  
+- Schema validation UI  
+
+Your library is now modular — the next layer is authoring tools.
