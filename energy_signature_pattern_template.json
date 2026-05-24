@@ -1,0 +1,59 @@
+[
+  {
+    "id": "pattern_001",
+    "name": "Helical Plasma Mode A",
+    "description": "Baseline helical mode with low-frequency modulation.",
+    "domain": "time-frequency",
+    "globalRepresentation": {
+      "type": "functional",
+      "variables": ["t"],
+      "expression": "A  sin(omega  t + phi) + B  sin(omega2  t + phi2)",
+      "parameters": {
+        "A": 1.0,
+        "omega": 3.14,
+        "phi": 0.0,
+        "B": 0.3,
+        "omega2": 0.5,
+        "phi2": 1.57
+      }
+    },
+    "features": [
+      {
+        "id": "featurepeakband",
+        "name": "Primary frequency band",
+        "type": "spectral_peak",
+        "mathForm": {
+          "variables": ["f"],
+          "expression": "exp(-((f - f0)^2) / (2 * sigma^2))",
+          "parameters": {
+            "f0": 3.14,
+            "sigma": 0.4
+          }
+        },
+        "metadata": {
+          "role": "carrier",
+          "importance": 0.9
+        }
+      },
+      {
+        "id": "feature_sideband",
+        "name": "Sideband modulation",
+        "type": "sideband",
+        "mathForm": {
+          "variables": ["f"],
+          "expression": "alpha  exp(-((f - (f0 + delta))^2) / (2  sigma^2))",
+          "parameters": {
+            "alpha": 0.3,
+            "f0": 3.14,
+            "delta": 0.5,
+            "sigma": 0.2
+          }
+        },
+        "metadata": {
+          "role": "modulation",
+          "importance": 0.6
+        }
+      }
+    ]
+  }
+]
