@@ -1,0 +1,774 @@
+Yes. I think **direction + scale + confidence** gives us the missing abstraction between raw measurements and categorical decisions.
+
+ I'd push that idea further and make it a foundational rule of the entire library:
+
+ > **Measurements should preserve information; discriminators should transform information; routers should interpret information.**
+
+ That keeps the lower layers from prematurely deciding what a signal "is."
+
+ ## 1\. A richer measurement object
+
+ Instead of:
+
+```
+{
+  "periodicity": 0.93
+}
+```
+
+ I'd make the primitive result something like:
+
+```
+{
+  "value": 0.93,
+  "scale": {
+    "type": "normalized",
+    "min": 0,
+    "max": 1
+  },
+  "direction": 1,
+  "confidence": 0.96
+}
+```
+
+ But I'd actually distinguish **direction** from the numeric value.
+
+ For example:
+
+```
+{
+  "value": 0.93,
+  "direction": "positive",
+  "magnitude": 0.93,
+  "confidence": 0.96
+}
+```
+
+ That becomes much more useful for measurements that can move in either direction.
+
+---
+
+ # 2\. Not every measurement needs a direction
+
+ We should define measurement semantics explicitly.
+
+ ### Magnitude-only
+
+ Examples:
+
+ - RMS
+- bandwidth
+- spectral entropy
+- amplitude
+- frequency
+
+```
+{
+  "magnitude": 3.14,
+  "unit": "Hz"
+}
+```
+
+ ### Signed
+
+ Examples:
+
+ - frequency drift
+- phase offset
+- DC offset
+- slope
+- correlation coefficient
+
+```
+{
+  "magnitude": 0.12,
+  "direction": "negative"
+}
+```
+
+ Or numerically:
+
+```
+{
+  "value": -0.12
+}
+```
+
+ ### Bounded scalar
+
+ Examples:
+
+ - periodicity
+- stationarity
+- harmonicity
+- spectral flatness
+
+```
+{
+  "value": 0.87,
+  "scale": [0, 1]
+}
+```
+
+ ### Vector
+
+ Some phenomena really shouldn't be collapsed into one number.
+
+ For example:
+
+```
+{
+  "magnitude": 0.42,
+  "direction": {
+    "axis": "frequency",
+    "sign": "increasing"
+  }
+}
+```
+
+ Eventually we could support multidimensional measurement spaces.
+
+---
+
+ # 3\. Scale should be first-class
+
+ This is the part I think could become particularly powerful.
+
+ Consider:
+
+```
+frequency = 3.14 Hz
+```
+
+ and:
+
+```
+periodicity = 0.93
+```
+
+ Those numbers aren't directly comparable.
+
+ So every measurement should know its **scale semantics**.
+
+ I'd support at least:
+
+```
+ABSOLUTE
+NORMALIZED
+LOGARITHMIC
+STANDARDIZED
+RELATIVE
+RATIO
+PROBABILITY
+ANGLE
+RATE
+```
+
+ For example:
+
+```
+{
+  "value": 3.14,
+  "unit": "Hz",
+  "scaleType": "absolute"
+}
+```
+
+ versus:
+
+```
+{
+  "value": 0.93,
+  "scaleType": "normalized",
+  "range": [0, 1]
+}
+```
+
+ versus:
+
+```
+{
+  "value": -12.4,
+  "unit": "dB",
+  "scaleType": "logarithmic"
+}
+```
+
+ This prevents the matching system from accidentally treating fundamentally different quantities as equivalent.
+
+---
+
+ # 4\. Add uncertainty
+
+ I'd also make uncertainty part of the measurement itself.
+
+ For example:
+
+```
+{
+  "value": 3.14,
+  "unit": "Hz",
+
+  "uncertainty": {
+    "type": "standardDeviation",
+    "value": 0.04
+  },
+
+  "confidence": 0.94
+}
+```
+
+ Now the downstream matcher can distinguish:
+
+```
+3.14 ± 0.04 Hz
+```
+
+ from:
+
+```
+3.14 ± 0.80 Hz
+```
+
+ even though their nominal values are identical.
+
+ That's important.
+
+---
+
+ # 5\. Then discriminators become transformations
+
+ This gives us a beautiful layered structure:
+
+```
+RAW DATA
+   │
+   ▼
+Measurement
+   │
+   │  normalize
+   │  compare
+   │  combine
+   ▼
+Discriminator
+   │
+   │  interpret
+   │  classify
+   ▼
+Structural Feature
+   │
+   │  route
+   ▼
+Matcher
+```
+
+ For example:
+
+```
+FFT
+ ↓
+peak frequency = 3.08 ± .03 Hz
+ ↓
+frequency stability = .94
+ ↓
+"stable oscillator"
+ ↓
+oscillatory branch
+ ↓
+candidate patterns
+```
+
+ Each layer adds meaning without destroying the previous information.
+
+---
+
+ # 6\. A discriminator should return evidence, not just a score
+
+ I'd define something like:
+
+```
+{
+  "id": "periodicity",
+
+  "result": {
+    "value": 0.93,
+    "scale": "normalized",
+    "confidence": 0.96
+  },
+
+  "evidence": [
+    {
+      "measurement": "autocorrelation_peak",
+      "value": 0.91
+    },
+    {
+      "measurement": "cycle_consistency",
+      "value": 0.95
+    },
+    {
+      "measurement": "spectral_fundamental",
+      "value": 0.94
+    }
+  ]
+}
+```
+
+ That makes every discriminator **inspectable**.
+
+ If the system claims:
+
+ > Periodicity = 0.93
+
+ we can ask:
+
+ > Why?
+
+ And get the underlying measurements.
+
+---
+
+ # 7\. Now introduce the concept of a feature envelope
+
+ This is where it gets particularly interesting for the pattern library.
+
+ A pattern shouldn't necessarily say:
+
+```
+"frequency": 3.14
+```
+
+ It should be able to describe an **expected region**.
+
+ For example:
+
+```
+{
+  "frequency": {
+    "center": 3.14,
+    "scale": 0.20,
+    "shape": "gaussian"
+  }
+}
+```
+
+ That means:
+
+ > The pattern expects frequency around 3.14 Hz, with characteristic spread 0.20 Hz.
+
+ Then matching becomes a distance in feature space rather than a yes/no comparison.
+
+---
+
+ # 8\. Direction becomes especially useful here
+
+ Suppose a pattern expects:
+
+```
+frequency drift → increasing
+```
+
+ We observe:
+
+```
+drift → decreasing
+```
+
+ Even if the magnitude is similar:
+
+```
+expected: +0.12
+observed: -0.11
+```
+
+ that's potentially a **very bad match**.
+
+ A scalar absolute-difference metric would say:
+
+```
+|0.11 - 0.12| = 0.01
+```
+
+ and incorrectly conclude that they're nearly identical.
+
+ Direction-aware matching instead recognizes:
+
+```
+magnitude similarity = high
+direction compatibility = low
+```
+
+ and therefore:
+
+```
+overall similarity = low
+```
+
+ That's a strong reason to preserve direction all the way through the architecture.
+
+---
+
+ # 9\. I'd define compatibility as multiple dimensions
+
+ For a measurement pair:
+
+```
+Expected:
+ magnitude = .12
+ direction = increasing
+ scale = normalized
+
+Observed:
+ magnitude = .11
+ direction = decreasing
+ scale = normalized
+```
+
+ we could calculate:
+
+ $$
+S = S_m \times S_d \times S_c
+$$
+
+ where:
+
+ - $S_m$ = magnitude similarity
+- $S_d$ = directional compatibility
+- $S_c$ = confidence compatibility
+
+ For example:
+
+```
+magnitude similarity       .92
+direction compatibility    .05
+confidence                 .94
+──────────────────────────────
+overall                    .043
+```
+
+ That's much more expressive than a single Euclidean distance.
+
+---
+
+ # 10\. And scale compatibility should come before comparison
+
+ We should never blindly compare:
+
+```
+3.14 Hz
+```
+
+ with:
+
+```
+0.93 normalized
+```
+
+ The system should first ask:
+
+```
+Are these measurements comparable?
+```
+
+ So every measurement has a semantic identity:
+
+```
+{
+  "quantity": "frequency",
+  "unit": "Hz",
+  "scaleType": "absolute"
+}
+```
+
+ and:
+
+```
+{
+  "quantity": "periodicity",
+  "scaleType": "normalized"
+}
+```
+
+ The matcher can then reject incompatible comparisons automatically.
+
+ That should be a **core safety mechanism of the matcher framework**.
+
+---
+
+ # 11\. This naturally leads to a measurement ontology
+
+ I wouldn't make this overly complicated at first, but I'd establish a controlled vocabulary:
+
+```
+Signal
+ ├── amplitude
+ ├── energy
+ ├── frequency
+ ├── phase
+ ├── time
+ ├── rate
+ ├── bandwidth
+ ├── entropy
+ ├── correlation
+ └── coherence
+```
+
+ Then structural properties:
+
+```
+Waveform
+ ├── periodicity
+ ├── stationarity
+ ├── harmonicity
+ ├── transience
+ ├── impulsiveness
+ ├── modulation
+ ├── chirp
+ └── complexity
+```
+
+ And derived relationships:
+
+```
+Relationship
+ ├── harmonic_ratio
+ ├── sideband_ratio
+ ├── carrier_modulation_ratio
+ ├── phase_relationship
+ └── frequency_relationship
+```
+
+ This gives the pattern library a shared vocabulary.
+
+---
+
+ # 12\. Then the hierarchy can operate on semantics
+
+ Instead of writing:
+
+```
+if (periodicity > 0.7) ...
+```
+
+ we can conceptually configure:
+
+```
+{
+  "route": "oscillatory",
+  "condition": {
+    "quantity": "periodicity",
+    "operator": "greaterThan",
+    "value": 0.70
+  }
+}
+```
+
+ Or better:
+
+```
+{
+  "route": "oscillatory",
+  "condition": {
+    "quantity": "periodicity",
+    "expected": 0.9,
+    "minimumConfidence": 0.7
+  }
+}
+```
+
+ The routing system doesn't need to know how periodicity was calculated.
+
+ That's a major decoupling.
+
+---
+
+ # 13\. I'd introduce `Measurement`, `Discriminator`, and `Evidence`
+
+ These should become three core interfaces.
+
+```
+Measurement
+    │
+    ├── quantity
+    ├── value
+    ├── unit
+    ├── scale
+    ├── direction
+    ├── uncertainty
+    └── confidence
+
+Discriminator
+    │
+    ├── inputs
+    ├── transformation
+    ├── result
+    └── evidence
+
+Evidence
+    │
+    ├── source
+    ├── measurement
+    ├── contribution
+    └── confidence
+```
+
+ Then:
+
+```
+Matcher
+    │
+    ├── consumes Evidence / Measurements
+    ├── compares against Pattern expectations
+    └── emits MatchEvidence
+```
+
+ That gives us a very clean chain.
+
+---
+
+ # 14\. The hierarchy now becomes a semantic funnel
+
+ I'd envision the entire system as:
+
+```
+                    RAW SIGNAL
+                        │
+                        ▼
+                Primitive Measurements
+                        │
+                        ▼
+               Waveform Discriminators
+                        │
+                        ▼
+                  Waveform Profile
+                        │
+                        ▼
+                Structural Features
+                        │
+                        ▼
+                Hierarchical Routing
+                        │
+              ┌─────────┼─────────┐
+              ▼         ▼         ▼
+          Candidate   Candidate  Candidate
+          Branch A    Branch B   Branch C
+              │         │         │
+              └─────────┼─────────┘
+                        ▼
+                   Matchers
+                        │
+                        ▼
+                  Match Evidence
+                        │
+                        ▼
+                   Aggregation
+                        │
+                        ▼
+                 Pattern Result
+```
+
+ And critically, **information gets richer as we move down the funnel**.
+
+ We aren't throwing away the raw evidence.
+
+---
+
+ # 15\. This suggests an especially useful `EvidenceGraph`
+
+ I'd seriously consider making the internal representation a graph rather than just a collection of objects.
+
+ Something like:
+
+```
+FFT Peak
+  │
+  ├──→ Fundamental Frequency
+  │         │
+  │         └──→ Periodicity
+  │
+  └──→ Harmonic Structure
+             │
+             └──→ Harmonicity
+```
+
+ Then:
+
+```
+Periodicity
+     │
+     ├──→ Oscillatory classification
+     │
+     └──→ Candidate selection
+```
+
+ And:
+
+```
+Harmonicity
+     │
+     └──→ Harmonic Matcher
+```
+
+ That gives us traceability.
+
+ A final pattern match can theoretically answer:
+
+ > "Why did you select this pattern?"
+
+ and trace the decision back through:
+
+```
+Pattern
+ ← Matcher
+ ← Discriminator
+ ← Measurements
+ ← Raw signal
+```
+
+ That's a very powerful property for a research/engineering-oriented system.
+
+---
+
+ ## Where I'd go next
+
+ At this point I would **stop designing the high-level architecture and define the actual contracts**.
+
+ Specifically, I'd write the first versions of:
+
+```
+core/
+├── measurement.schema.json
+├── discriminator.schema.json
+├── evidence.schema.json
+├── waveform-profile.schema.json
+├── matcher-result.schema.json
+└── candidate-set.schema.json
+```
+
+ Then implement perhaps **six primitive discriminators**:
+
+ 1. Periodicity
+2. Stationarity
+3. Transience
+4. Harmonicity
+5. Spectral concentration
+6. Frequency drift
+
+ Those six would be enough to prove the entire hierarchical concept.
+
+ And I'd make the first test signal suite deliberately diverse:
+
+```
+sine
+harmonic oscillator
+AM signal
+chirp
+impulse
+decaying oscillation
+white noise
+colored noise
+mixed signal
+```
+
+ If the discriminator layer can produce sensible **magnitude + direction + scale + uncertainty + confidence** representations for those, then we have a solid foundation on which the hierarchical matcher suite can grow.
+
+ That's the point where I'd start writing actual code into the repository rather than continuing to add architectural concepts.
