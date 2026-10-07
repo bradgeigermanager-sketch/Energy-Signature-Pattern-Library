@@ -1,0 +1,530 @@
+Yes. I think **waveform discriminators are an excellent Level-0/Level-1 foundation** for the hierarchy.
+
+ In fact, I'd put them _before_ the pattern matcher. The matcher shouldn't initially be asking, "Which of 500 patterns is this?" It should first ask, **"What kind of waveform am I looking at?"**
+
+ ## Waveform discriminator layer
+
+ I'd structure the front end roughly like:
+
+```
+                         RAW SIGNAL
+                             │
+                             ▼
+                  ┌─────────────────────┐
+                  │ Waveform Discriminator │
+                  └──────────┬──────────┘
+                             │
+          ┌──────────────────┼──────────────────┐
+          ▼                  ▼                  ▼
+     Time-domain        Frequency-domain   Time-frequency
+     discriminators     discriminators      discriminators
+          │                  │                  │
+          └──────────────────┼──────────────────┘
+                             ▼
+                    WAVEFORM PROFILE
+                             │
+                             ▼
+                    ROUTING / GATING
+                             │
+          ┌──────────────────┼──────────────────┐
+          ▼                  ▼                  ▼
+      periodic           transient          broadband
+          │                  │                  │
+          ▼                  ▼                  ▼
+     specialized         specialized        specialized
+       matchers             matchers           matchers
+```
+
+ The crucial idea is that the discriminators **don't identify the pattern**. They characterize the signal sufficiently to determine what analyses are worth running next.
+
+---
+
+ # 1\. Think of discriminators as measurements, not classifiers
+
+ I'd avoid making a discriminator return simply:
+
+```
+"periodic"
+```
+
+ Instead:
+
+```
+{
+  "periodicity": 0.93,
+  "transience": 0.08,
+  "stationarity": 0.81,
+  "harmonicity": 0.76,
+  "impulsiveness": 0.12,
+  "complexity": 0.42
+}
+```
+
+ That gives us a **waveform profile**.
+
+ Then routing becomes probabilistic rather than brittle:
+
+```
+periodicity     .93  ███████████████████
+stationarity    .81  ████████████████
+harmonicity     .76  ███████████████
+transience      .08  ██
+impulsiveness   .12  ██
+complexity      .42  ████████
+```
+
+ That is much more useful.
+
+---
+
+ # 2\. The core discriminator set
+
+ I'd start with a relatively small canonical vocabulary.
+
+ ### Time-domain discriminators
+
+ - **Periodicity**
+- **Stationarity**
+- **Transience**
+- **Impulsiveness**
+- **Symmetry**
+- **Crest factor**
+- **Zero-crossing rate**
+- **RMS stability**
+- **Amplitude envelope**
+- **Autocorrelation structure**
+
+ ### Frequency-domain discriminators
+
+ - **Spectral concentration**
+- **Spectral entropy**
+- **Spectral centroid**
+- **Spectral bandwidth**
+- **Peak density**
+- **Harmonicity**
+- **Fundamental prominence**
+- **Spectral flatness**
+- **Subharmonic structure**
+- **Sideband presence**
+
+ ### Time-frequency discriminators
+
+ - **Frequency stability**
+- **Frequency drift**
+- **Chirp tendency**
+- **Modulation**
+- **Transient localization**
+- **Spectral evolution**
+- **Time-varying bandwidth**
+
+ That's enough to route a surprisingly large variety of signals.
+
+---
+
+ # 3\. Don't make every discriminator equally expensive
+
+ This is where the hierarchy becomes powerful.
+
+ I'd divide them into computational tiers.
+
+```
+Tier 0 — virtually free
+────────────────────────
+RMS
+mean
+variance
+zero crossings
+crest factor
+basic autocorrelation
+
+             ↓
+
+Tier 1 — inexpensive
+─────────────────────
+FFT
+spectral centroid
+bandwidth
+entropy
+peak detection
+harmonicity
+
+             ↓
+
+Tier 2 — moderate
+──────────────────
+STFT
+spectral tracking
+modulation analysis
+cepstral analysis
+wavelet features
+
+             ↓
+
+Tier 3 — expensive
+───────────────────
+nonlinear dynamics
+model fitting
+Bayesian inference
+ML embeddings
+full waveform simulation
+```
+
+ The system only moves downward when the earlier measurements justify it.
+
+---
+
+ # 4\. The discriminator result should be standardized
+
+ I'd define something like:
+
+```
+{
+    id: "periodicity",
+
+    value: 0.93,
+
+    confidence: 0.96,
+
+    evidence: {
+        autocorrelationPeak: 0.91,
+        peakStability: 0.95,
+        spectralFundamental: 0.94
+    },
+
+    cost: "low"
+}
+```
+
+ Notice something important here:
+
+ **A discriminator can use multiple primitive measurements.**
+
+ So `periodicity` itself becomes a composite concept.
+
+---
+
+ # 5\. Then create a Waveform Profile
+
+ The output of the whole discriminator stage becomes a standardized object:
+
+```
+{
+  "profileVersion": "1.0",
+
+  "signal": {
+    "duration": 10.0,
+    "sampleRate": 1000,
+    "channels": 1
+  },
+
+  "discriminators": {
+    "periodicity": 0.93,
+    "stationarity": 0.81,
+    "transience": 0.08,
+    "impulsiveness": 0.12,
+    "harmonicity": 0.76,
+    "spectralConcentration": 0.87,
+    "spectralEntropy": 0.31,
+    "modulation": 0.64,
+    "frequencyDrift": 0.11
+  }
+}
+```
+
+ This becomes the **passport for the signal**.
+
+ Everything downstream can use it.
+
+---
+
+ # 6\. Now routing becomes extremely elegant
+
+ Suppose we get:
+
+```
+periodicity       .94
+harmonicity       .88
+modulation        .72
+frequencyDrift    .06
+transience        .04
+```
+
+ The router can infer:
+
+```
+OSCILLATORY
+    │
+    └── HARMONIC
+          │
+          └── MODULATED
+                │
+                └── stable-frequency branch
+```
+
+ Therefore it doesn't waste time running:
+
+```
+chirp matcher
+impulse matcher
+transient detector
+```
+
+ against this signal.
+
+---
+
+ # 7\. But don't use hard routing exclusively
+
+ I'd strongly recommend **soft routing**.
+
+ For example:
+
+```
+{
+  "routes": [
+    {
+      "branch": "periodic",
+      "score": 0.94
+    },
+    {
+      "branch": "modulated",
+      "score": 0.72
+    },
+    {
+      "branch": "harmonic",
+      "score": 0.88
+    },
+    {
+      "branch": "transient",
+      "score": 0.04
+    }
+  ]
+}
+```
+
+ Then the system can retain multiple hypotheses.
+
+ That prevents an early discriminator error from killing the correct downstream match.
+
+---
+
+ # 8\. This also gives us an elegant hierarchy
+
+ I'd actually call the first subsystem:
+
+ ## Waveform Discrimination Layer
+
+ Then:
+
+```
+Waveform Discrimination
+        │
+        ▼
+Waveform Profile
+        │
+        ▼
+Structural Classification
+        │
+        ├── Oscillatory
+        │     ├── harmonic
+        │     ├── multi-tone
+        │     └── modulated
+        │
+        ├── Transient
+        │     ├── impulse
+        │     ├── burst
+        │     └── decay
+        │
+        ├── Stochastic
+        │     ├── broadband
+        │     ├── narrowband
+        │     └── structured noise
+        │
+        └── Nonstationary
+              ├── chirp
+              ├── drifting
+              └── evolving
+                         │
+                         ▼
+                   Pattern Candidates
+                         │
+                         ▼
+                    Deep Matchers
+```
+
+ That is a very clean conceptual architecture.
+
+---
+
+ # 9\. And there's an important distinction between waveform and pattern
+
+ I'd preserve this distinction rigorously.
+
+ A waveform discriminator might determine:
+
+ > **"This signal is strongly periodic, harmonic, and weakly modulated."**
+
+ It should **not** conclude:
+
+ > **"This is Helical Plasma Mode A."**
+
+ That's the job of the downstream pattern matcher.
+
+ So:
+
+```
+Discriminator:
+"What does the signal look like?"
+
+Matcher:
+"Which known pattern best explains those characteristics?"
+
+Model fitter:
+"How well does the mathematical model reproduce the signal?"
+```
+
+ Those are three different questions.
+
+---
+
+ # 10\. It also makes the pattern library much more powerful
+
+ Patterns can declare their **discriminator envelope**.
+
+ For example:
+
+```
+{
+  "id": "helical_plasma_mode_a",
+
+  "profile": {
+    "periodicity": {
+      "expected": 0.9,
+      "minimum": 0.6
+    },
+
+    "harmonicity": {
+      "expected": 0.8,
+      "minimum": 0.5
+    },
+
+    "modulation": {
+      "expected": 0.7,
+      "minimum": 0.3
+    },
+
+    "transience": {
+      "maximum": 0.3
+    }
+  }
+}
+```
+
+ Now the pattern itself tells the hierarchical matcher:
+
+ > **Don't bother evaluating me against signals that don't resemble my broad structural class.**
+
+ That could make the library extremely scalable.
+
+---
+
+ # 11\. I'd make discriminators composable too
+
+ For example:
+
+```
+Periodicity
+├── autocorrelation
+├── spectral peak stability
+└── cycle consistency
+
+Harmonicity
+├── harmonic-to-noise ratio
+├── integer frequency relationship
+└── harmonic energy distribution
+
+Modulation
+├── envelope periodicity
+├── sideband symmetry
+└── carrier/envelope relationship
+```
+
+ So even the discriminator layer has the same architecture we're proposing for matchers:
+
+```
+Primitive measurement
+        ↓
+Discriminator
+        ↓
+Structural feature
+        ↓
+Pattern matcher
+```
+
+ That gives the whole system a consistent design language.
+
+---
+
+ # 12\. I think this changes our implementation order
+
+ Rather than jumping immediately into `MatcherSuite`, I'd build:
+
+```
+1. Signal abstraction
+       ↓
+2. Primitive measurements
+       ↓
+3. Waveform discriminators
+       ↓
+4. Waveform profile
+       ↓
+5. Hierarchical router
+       ↓
+6. Candidate set
+       ↓
+7. Pattern matchers
+       ↓
+8. Matcher suite
+       ↓
+9. Final scoring
+```
+
+ That is a stronger foundation than starting with pattern matching itself.
+
+ And importantly, **the first four layers can be useful without having a single pattern in the library**.
+
+ You could feed a completely unknown waveform into the system and get:
+
+ > Periodic: 0.94\
+>  Harmonic: 0.87\
+>  Modulated: 0.73\
+>  Transient: 0.04\
+>  Frequency drift: 0.09
+
+ That tells us something meaningful even when **no library pattern matches**.
+
+ That "unknown but characterized" capability is something I'd consider a core requirement for the system.
+
+ ### One additional idea
+
+ I'd give every discriminator a **direction and scale**, rather than just a scalar whenever possible.
+
+ For example, "frequency drift" could be:
+
+```
+magnitude: 0.09
+direction: +1
+confidence: 0.93
+```
+
+ and modulation could describe:
+
+```
+depth: 0.31
+frequency: 0.50 Hz
+confidence: 0.88
+```
+
+ That lets the discriminator layer progressively hand increasingly rich information to the matcher without forcing the matcher to recompute basic signal properties.
+
+ **So yes: I'd make waveform discriminators the first real analytical layer of the hierarchical Matcher Suite.** The hierarchy then becomes a progressively narrowing funnel from cheap, general waveform characterization toward expensive, pattern-specific analysis.
