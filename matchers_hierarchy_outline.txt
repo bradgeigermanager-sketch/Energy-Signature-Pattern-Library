@@ -1,0 +1,557 @@
+Yes. I think **hierarchical matching should come first**, before we build a large collection of individual matchers.
+
+ The key is to make the hierarchy itself modular, so we're building the **skeleton of the Matcher Suite** before filling it with increasingly sophisticated matching algorithms.
+
+ ## 1\. Start with a hierarchical matching pipeline
+
+ I'd make the initial architecture:
+
+```
+                         Matcher Suite
+                              │
+                              ▼
+                    ┌───────────────────┐
+                    │ Candidate Selector │
+                    └─────────┬─────────┘
+                              │
+                     coarse candidate set
+                              │
+                              ▼
+                    ┌───────────────────┐
+                    │   Level 1         │
+                    │ Coarse Matchers   │
+                    └─────────┬─────────┘
+                              │
+                         candidates
+                              │
+                              ▼
+                    ┌───────────────────┐
+                    │   Level 2         │
+                    │ Feature Matchers  │
+                    └─────────┬─────────┘
+                              │
+                         candidates
+                              │
+                              ▼
+                    ┌───────────────────┐
+                    │   Level 3         │
+                    │ Detailed Matchers │
+                    └─────────┬─────────┘
+                              │
+                              ▼
+                    ┌───────────────────┐
+                    │ Final Aggregator  │
+                    └───────────────────┘
+```
+
+ But I would **not hard-code "Level 1/2/3" into the matcher classes**.
+
+ Instead, the hierarchy should be data/configuration driven.
+
+---
+
+ # 2\. Define a `MatcherNode`
+
+ Conceptually:
+
+```
+class MatcherNode {
+    constructor(config) {
+        this.id = config.id;
+        this.matcher = config.matcher;
+        this.children = config.children || [];
+        this.threshold = config.threshold;
+        this.maxCandidates = config.maxCandidates;
+    }
+
+    async evaluate(context) {
+        // execute matcher
+        // filter/rank candidates
+        // pass surviving candidates to children
+    }
+}
+```
+
+ Then the hierarchy becomes a tree.
+
+ For example:
+
+```
+root
+│
+├── spectral_screen
+│   │
+│   ├── oscillatory
+│   │   ├── harmonic
+│   │   └── modulated
+│   │
+│   └── broadband
+│       ├── transient
+│       └── noise_like
+│
+└── temporal_screen
+    │
+    ├── periodic
+    └── transient
+```
+
+ This is much more interesting than simply having three fixed stages.
+
+---
+
+ # 3\. The first hierarchy should be extremely cheap
+
+ I'd make the first matcher intentionally unsophisticated.
+
+ Something like:
+
+```
+Signal
+ │
+ ├── Is it oscillatory?
+ │
+ ├── Is it broadband?
+ │
+ ├── Is it transient?
+ │
+ └── Is it mixed?
+```
+
+ We don't want to perform expensive curve fitting against every pattern.
+
+ The first question is:
+
+ > **What broad family of signatures could this signal plausibly belong to?**
+
+ That gives us candidate reduction.
+
+---
+
+ # 4\. Candidate sets should be explicit
+
+ I'd introduce a `CandidateSet` object.
+
+```
+{
+  "source": "spectral_screen",
+  "candidates": [
+    {
+      "patternId": "helical_plasma_mode_a",
+      "score": 0.91
+    },
+    {
+      "patternId": "oscillatory_mode_b",
+      "score": 0.84
+    }
+  ]
+}
+```
+
+ Then each subsequent node receives that set rather than re-querying the entire library.
+
+ Conceptually:
+
+```
+10,000 patterns
+       │
+       ▼
+ coarse matcher
+       │
+       ▼
+   1,200
+       │
+       ▼
+ feature matcher
+       │
+       ▼
+     180
+       │
+       ▼
+ detailed matcher
+       │
+       ▼
+      12
+       │
+       ▼
+ final scoring
+       │
+       ▼
+       3 results
+```
+
+ That makes the architecture scalable.
+
+---
+
+ # 5\. Don't throw away candidates too aggressively
+
+ This is important.
+
+ If Level 1 gives:
+
+```
+Pattern A = .91
+Pattern B = .89
+Pattern C = .88
+```
+
+ and we arbitrarily say:
+
+```
+threshold = .90
+```
+
+ we've just thrown away B and C before the more sophisticated matchers got a chance to evaluate them.
+
+ Instead, early stages should usually use:
+
+ - top-N selection
+- broad thresholds
+- confidence margins
+
+ For example:
+
+```
+{
+  "selection": {
+    "method": "top_n",
+    "n": 100
+  }
+}
+```
+
+ Then later levels can become increasingly selective.
+
+---
+
+ # 6\. Separate classification from matching
+
+ This is another architectural distinction I'd make early.
+
+ A hierarchical node might perform either:
+
+ ### Classification
+
+ > "This signal appears oscillatory."
+
+ or:
+
+ ### Matching
+
+ > "This signal resembles Pattern X."
+
+ So:
+
+```
+Hierarchy
+│
+├── Classifier Nodes
+│   ├── oscillatory
+│   ├── transient
+│   ├── broadband
+│   └── modulated
+│
+└── Matcher Nodes
+    ├── spectral
+    ├── harmonic
+    ├── temporal
+    └── model-fit
+```
+
+ A classifier can therefore route the signal into an appropriate branch.
+
+---
+
+ # 7\. Make routing configurable
+
+ This is where the suite starts becoming genuinely modular.
+
+ Something like:
+
+```
+{
+  "suiteId": "default-hierarchical",
+
+  "root": {
+    "type": "classifier",
+    "matcher": "signal_profile",
+
+    "routes": [
+      {
+        "when": "oscillatory >= 0.7",
+        "next": "oscillatory_branch"
+      },
+      {
+        "when": "transient >= 0.7",
+        "next": "transient_branch"
+      },
+      {
+        "when": "broadband >= 0.7",
+        "next": "broadband_branch"
+      }
+    ]
+  }
+}
+```
+
+ Now the **suite configuration defines the hierarchy**, not JavaScript conditionals.
+
+---
+
+ # 8\. A first practical hierarchy for this repository
+
+ I'd start much smaller than the eventual system.
+
+ ### Stage 0 — Signal profile
+
+ Extract:
+
+ - duration
+- sample rate
+- RMS
+- dynamic range
+- dominant frequency
+- spectral centroid
+- spectral bandwidth
+- peak count
+
+ ↓
+
+ ### Stage 1 — Broad family
+
+ Classify:
+
+```
+OSCILLATORY
+TRANSIENT
+BROADBAND
+MIXED
+UNKNOWN
+```
+
+ ↓
+
+ ### Stage 2 — Signature characteristics
+
+ For oscillatory signals:
+
+```
+SINGLE-TONE
+HARMONIC
+MODULATED
+MULTI-TONE
+NOISY-PERIODIC
+```
+
+ For transient signals:
+
+```
+IMPULSE
+BURST
+DECAY
+CHIRP
+```
+
+ ↓
+
+ ### Stage 3 — Pattern candidates
+
+ Now compare against actual library patterns.
+
+ ↓
+
+ ### Stage 4 — Detailed matching
+
+ Run specialized matchers only against the survivors.
+
+---
+
+ # 9\. The resulting tree might look like this
+
+```
+ROOT
+│
+├── OSCILLATORY
+│   │
+│   ├── SINGLE_TONE
+│   │   └── frequency matcher
+│   │
+│   ├── HARMONIC
+│   │   ├── harmonic matcher
+│   │   └── spectral matcher
+│   │
+│   ├── MODULATED
+│   │   ├── carrier matcher
+│   │   ├── modulation matcher
+│   │   └── sideband matcher
+│   │
+│   └── MULTI_TONE
+│       └── spectral matcher
+│
+├── TRANSIENT
+│   ├── IMPULSE
+│   ├── BURST
+│   ├── DECAY
+│   └── CHIRP
+│
+├── BROADBAND
+│   ├── NOISE
+│   ├── CONTINUOUS
+│   └── STRUCTURED
+│
+└── UNKNOWN
+    └── exploratory matcher
+```
+
+ And **that is already a Matcher Suite** even before we implement sophisticated algorithms.
+
+---
+
+ # 10\. Patterns should declare where they live in the hierarchy
+
+ This is where I'd modify the existing `patterns.json`.
+
+ Instead of only:
+
+```
+{
+  "id": "pattern_001",
+  "domain": "time-frequency"
+}
+```
+
+ add something like:
+
+```
+{
+  "classification": {
+    "families": [
+      "oscillatory",
+      "modulated"
+    ],
+
+    "characteristics": [
+      "carrier",
+      "sideband"
+    ]
+  }
+}
+```
+
+ Then the hierarchy can eliminate incompatible patterns **without even running a matcher**.
+
+ That gives us a very cheap first-pass filter.
+
+---
+
+ # 11\. One particularly important design decision
+
+ I'd make the hierarchy **a DAG rather than strictly a tree** eventually.
+
+ Why?
+
+ A pattern might simultaneously be:
+
+```
+oscillatory
+      +
+modulated
+      +
+harmonic
+```
+
+ It shouldn't have to belong to exactly one branch.
+
+ So eventually:
+
+```
+             OSCILLATORY
+             /         \
+            /           \
+       HARMONIC       MODULATED
+            \           /
+             \         /
+              PATTERN
+```
+
+ The implementation can therefore allow multiple routes to converge on the same candidate.
+
+ That is much more expressive than a conventional decision tree.
+
+---
+
+ # 12\. The first code I'd actually add
+
+ I wouldn't start by implementing ten matchers.
+
+ I'd create these core components:
+
+```
+matching/
+├── core/
+│   ├── matcher.js
+│   ├── matcher-result.js
+│   ├── matcher-context.js
+│   ├── candidate-set.js
+│   ├── matcher-node.js
+│   └── matcher-suite.js
+│
+├── classifiers/
+│   └── signal-profile.js
+│
+├── matchers/
+│   └── spectral-profile.js
+│
+└── suites/
+    └── default-hierarchical.json
+```
+
+ And initially there are only **two real analytical components**:
+
+```
+SignalProfileClassifier
+        ↓
+SpectralProfileMatcher
+```
+
+ Everything else is orchestration.
+
+ That's deliberate.
+
+ We want to prove that:
+
+ > **The hierarchy works independently of the sophistication of the matchers.**
+
+ Once that is working, adding `HarmonicMatcher`, `ModulationMatcher`, `TemporalMatcher`, etc. becomes relatively straightforward.
+
+---
+
+ ## The architectural principle I'd lock in now
+
+ I would define the system around this contract:
+
+```
+                    ┌──────────────┐
+                    │   Matcher    │
+                    └──────┬───────┘
+                           │
+                    MatcherResult
+                           │
+             ┌─────────────┴─────────────┐
+             │                           │
+       Candidate evidence           Diagnostics
+             │
+             ▼
+       MatcherNode
+             │
+       CandidateSet
+             │
+             ▼
+       next MatcherNode
+```
+
+ So **matchers produce evidence; nodes control progression; suites define the hierarchy; scorers make final decisions.**
+
+ That separation is the foundation I'd build the rest of the project on.
+
+ And I'd make the **first implementation a very small hierarchical prototype**, rather than trying to build the whole suite at once. That gives us something we can test against the existing `"Helical Plasma Mode A"` pattern immediately.
